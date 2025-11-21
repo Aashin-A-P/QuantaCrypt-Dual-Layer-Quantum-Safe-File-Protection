@@ -103,7 +103,7 @@ def run_qkd_key_exchange(bit_length: int = 256, eve=False):
     qber = compute_qber(sift_s, sift_r)
 
     # 7. If QBER too high → channel compromised
-    compromised = qber > 0.20
+    compromised = qber > 0.11
 
     # 8. Privacy amplification
     final_key = sha3_512(bits_to_bytes(sift_s))[:32]
