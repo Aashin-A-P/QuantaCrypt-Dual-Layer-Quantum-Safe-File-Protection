@@ -1,17 +1,12 @@
 import streamlit as st
 import os
 
-# ====== IMPORT ALL REAL MODULES ======
 from qkd.qkd_simulator import generate_qkd_key
 from pqc.kyber_simulator import generate_pqc_shared_secret
 from hybrid_key.key_fusion import derive_hybrid_key
 from hybrid_key.share_manager import distribute_shares, reconstruct_from_records
 from crypto_core.file_crypto import encrypt_file, decrypt_file
 
-
-# ======================================================
-# STREAMLIT CONFIG
-# ======================================================
 st.set_page_config(page_title="QuantaCrypt Dashboard", layout="wide")
 st.title("🔐 QuantaCrypt — Hybrid QKD + PQC Threshold Encryption System")
 st.markdown("---")
@@ -19,9 +14,7 @@ st.markdown("---")
 N_SHARES = 12
 T_THRESHOLD = 7
 
-# ======================================================
-# SESSION STATE INITIALIZATION
-# ======================================================
+#SESSION STATE INITIALIZATION
 if "hybrid_key" not in st.session_state:
     st.session_state.hybrid_key = None
 
@@ -41,9 +34,7 @@ if "original_filename" not in st.session_state:
     st.session_state.original_filename = None
 
 
-# ======================================================
-# 1️⃣ QKD SIMULATION
-# ======================================================
+#QKD SIMULATION
 st.header("1️⃣ Quantum Key Distribution (QKD) Simulation")
 
 col1, col2 = st.columns(2)
@@ -72,9 +63,7 @@ with col2:
 st.markdown("---")
 
 
-# ======================================================
-# 2️⃣ PQC SIMULATION
-# ======================================================
+# PQC SIMULATION
 st.header("2️⃣ PQC (Kyber Simulator)")
 
 col1, col2 = st.columns(2)
@@ -96,9 +85,7 @@ with col2:
 st.markdown("---")
 
 
-# ======================================================
-# 3️⃣ HYBRID KEY FUSION
-# ======================================================
+# HYBRID KEY FUSION
 st.header("3️⃣ Hybrid Key Fusion (QKD ⊕ PQC)")
 
 if st.session_state.hybrid_key is None:
@@ -115,9 +102,7 @@ st.code(hybrid_key.hex(), language="text")
 st.markdown("---")
 
 
-# ======================================================
-# 4️⃣ SECRET SHARING (SHAMIR)
-# ======================================================
+#SHAMIR'S SECRET SHARING
 st.header("4️⃣ Shamir Secret Sharing (12 shares, threshold 7)")
 
 if st.session_state.records is None:
@@ -172,9 +157,7 @@ else:
 st.markdown("---")
 
 
-# ======================================================
-# 5️⃣ FILE ENCRYPTION
-# ======================================================
+# FILE ENCRYPTION
 st.header("5️⃣ Encrypt File Using Hybrid Key")
 
 uploaded_file = st.file_uploader("Upload file to encrypt:")
@@ -196,9 +179,7 @@ if uploaded_file:
 st.markdown("---")
 
 
-# ======================================================
-# 6️⃣ FILE DECRYPTION (restore original file format!)
-# ======================================================
+# FILE DECRYPTION
 st.header("6️⃣ Decrypt File (Requires ≥7 Shares)")
 
 enc_uploaded = st.file_uploader("Upload encrypted file:", key="decrypt")
@@ -213,7 +194,6 @@ if enc_uploaded:
         with open(enc_file_path, "wb") as f:
             f.write(enc_uploaded.read())
 
-        # extract original extension
         original_ext = os.path.splitext(st.session_state.original_filename)[1]
         out_path = "decrypted_output" + original_ext
 
