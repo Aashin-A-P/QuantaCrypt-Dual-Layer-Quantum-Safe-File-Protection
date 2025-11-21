@@ -14,7 +14,7 @@ def kdf(label: bytes, *parts: bytes, length: int = 32) -> bytes:
 
 def kem_keygen():
     """
-    Toy Kyber-like KEM keygen.
+    Kyber-like KEM keygen.
     sk: random secret seed
     pk: derived from sk (so they are linked)
     """
