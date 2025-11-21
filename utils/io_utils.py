@@ -20,11 +20,14 @@ def read_file_bytes(path: str) -> bytes:
 # Write bytes to a file safely
 # ----------------------------------------------------------
 def write_file_bytes(path: str, data: bytes):
-    # Ensure parent directory exists
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # If writing to current folder, dirname = "" -> skip folder creation
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
 
     with open(path, "wb") as f:
         f.write(data)
+
 
 # ----------------------------------------------------------
 # Check if file is a QuantaCrypt encrypted file
