@@ -6,7 +6,6 @@ from .secret_sharing import make_shamir_shares, reconstruct_shamir_secret
 # Two channels: quantum (QKD) and classical (PQC)
 Channel = Literal["qkd_channel", "pqc_channel"]
 
-
 @dataclass
 class ShareRecord:
     """
@@ -16,7 +15,6 @@ class ShareRecord:
     x: int         # share x-coordinate
     data: bytes    # share y as bytes
     channel: Channel   # "qkd_channel" or "pqc_channel"
-
 
 def distribute_shares(
     hybrid_key: bytes,
@@ -57,7 +55,6 @@ def distribute_shares(
         )
 
     return records
-
 
 def reconstruct_from_records(
     records: List[ShareRecord],

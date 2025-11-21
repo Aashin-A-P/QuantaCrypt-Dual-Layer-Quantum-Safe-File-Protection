@@ -1,8 +1,6 @@
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime
-
-
 @dataclass
 class HybridKeyBundle:
     hybrid_key: bytes
@@ -12,13 +10,11 @@ class HybridKeyBundle:
     created_at: str
     info: dict
 
-
 def derive_hybrid_key(k_qkd: bytes, k_pqc: bytes, length_bytes: int = 64) -> bytes:
     if not isinstance(k_qkd, (bytes, bytearray)) or not isinstance(k_pqc, (bytes, bytearray)):
         raise TypeError("k_qkd and k_pqc must be bytes-like")
     digest = hashlib.sha3_512(k_qkd + k_pqc).digest()
     return digest[:length_bytes]
-
 
 def derive_hybrid_key_bundle(
     k_qkd: bytes,

@@ -3,18 +3,14 @@ import secrets
 # Large prime > 2^512
 PRIME = 2**521 - 1
 
-
 def _bytes_to_int(b: bytes) -> int:
     return int.from_bytes(b, "big")
-
 
 def _int_to_bytes(x: int, length: int) -> bytes:
     return x.to_bytes(length, "big")
 
-
 def _random_coeffs(k: int) -> list[int]:
     return [secrets.randbelow(PRIME) for _ in range(k - 1)]
-
 
 def _eval_poly(coeffs: list[int], x: int, secret_int: int) -> int:
     # p(x) = secret + a1*x + a2*x^2 + ... mod PRIME
@@ -24,7 +20,6 @@ def _eval_poly(coeffs: list[int], x: int, secret_int: int) -> int:
         res = (res + a * power) % PRIME
         power = (power * x) % PRIME
     return res
-
 
 def make_shamir_shares(secret: bytes, n: int, k: int) -> list[tuple[int, bytes]]:
     """
@@ -48,7 +43,6 @@ def make_shamir_shares(secret: bytes, n: int, k: int) -> list[tuple[int, bytes]]
         shares.append((x, y_bytes))
 
     return shares
-
 
 def _lagrange_interpolate_zero(points: list[tuple[int, int]]) -> int:
     """
@@ -74,7 +68,6 @@ def _lagrange_interpolate_zero(points: list[tuple[int, int]]) -> int:
         total = (total + yi * li) % PRIME
 
     return total
-
 
 def reconstruct_shamir_secret(
     shares: list[tuple[int, bytes]],
