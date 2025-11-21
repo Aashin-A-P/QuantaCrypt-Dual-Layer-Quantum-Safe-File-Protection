@@ -32,9 +32,14 @@ def sender_encrypt_and_sign(input_file: str):
     file_size = len(plaintext)
     print(f"[+] Loaded file: {input_file} ({file_size} bytes)")
 
-    # QKD KEY
-    qkd_key = run_qkd_key_exchange()
-    print("[+] QKD Key Generated")
+    qkd_key, qber, compromised = run_qkd_key_exchange(eve=False)
+
+    print(f"[+] QKD QBER: {qber:.4f}")
+    print(f"[+] Channel Compromised? {compromised}")
+
+    if compromised:
+        raise ValueError("[!] QKD Channel compromised — possible eavesdropper detected. Encryption aborted.")
+
 
     # PQC KEM 
     pqc_key, pk_kem, ct_kem = generate_pqc_shared_secret()
