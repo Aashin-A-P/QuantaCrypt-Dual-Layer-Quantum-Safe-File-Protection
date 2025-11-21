@@ -1,0 +1,34 @@
+# ==========================================================
+# file_decryptor.py — AES-256-GCM decryption module
+# ==========================================================
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from utils.constants import NONCE_SIZE
+from utils.io_utils import ensure_file_exists
+from .file_packager import unpack_encrypted_file
+
+
+# ----------------------------------------------------------
+# AES-GCM decrypt function
+# ----------------------------------------------------------
+def aes_gcm_decrypt(key: bytes, ciphertext: bytes, nonce: bytes, tag: bytes):
+    aesgcm = AESGCM(key[:32])
+
+    # AESGCM expects ciphertext + tag concatenated
+    ct_with_tag = ciphertext + tag
+
+    plaintext = aesgcm.decrypt(nonce, ct_with_tag, None)
+    return plaintext
+
+
+# ----------------------------------------------------------
+# High-level decrypt from packaged file bytes
+# ----------------------------------------------------------
+def decrypt_packed_file(key: bytes, packed_bytes: bytes):
+    version, nonce, tag, file_size, ciphertext = unpack_encrypted_file(packed_bytes)
+
+    plaintext = aes_gcm_decrypt(key, ciphertext, nonce, tag)
+
+    # Trim padding if any
+    return plaintext[:file_size]
