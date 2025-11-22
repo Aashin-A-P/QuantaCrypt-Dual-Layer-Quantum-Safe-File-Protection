@@ -1,5 +1,6 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils.io_utils import read_file_bytes, write_file_bytes
 from utils.hashing import sha3_512
 
@@ -19,10 +20,12 @@ from pqc_signature.dilithium_verify import verify_file_signature
 
 # AUDIT LOG
 from audit.audit_log import create_log_entry, append_log
-from audit.audit_signer import sign_log_entry, verify_log_entry
+from audit.audit_signer import sign_log_entry
 
 
+# ==========================================================
 # SENDER WORKFLOW
+# ==========================================================
 
 def sender_encrypt_and_sign(input_file: str):
     print("\n=== SENDER SIDE ===")
@@ -32,16 +35,15 @@ def sender_encrypt_and_sign(input_file: str):
     file_size = len(plaintext)
     print(f"[+] Loaded file: {input_file} ({file_size} bytes)")
 
+    # QKD WITH QBER + EAVESDROPPER DETECTION
     qkd_key, qber, compromised = run_qkd_key_exchange(eve=False)
-
     print(f"[+] QKD QBER: {qber:.4f}")
     print(f"[+] Channel Compromised? {compromised}")
 
     if compromised:
-        raise ValueError("[!] QKD Channel compromised — possible eavesdropper detected. Encryption aborted.")
+        raise ValueError("[!] QKD Channel compromised — Encryption aborted.")
 
-
-    # PQC KEM 
+    # PQC KEM (Kyber)
     pqc_key, pk_kem, ct_kem = generate_pqc_shared_secret()
     print("[+] PQC Shared Secret Generated")
 
@@ -54,26 +56,31 @@ def sender_encrypt_and_sign(input_file: str):
     packaged = package_encrypted_file(ciphertext, nonce, tag, file_size)
     print("[+] File Encrypted & Packaged")
 
-    # SIGNING
+    # PQC SIGNATURE
     pk_sig, sk_sig = generate_sig_keypair()
     signature = sign_file_bytes(packaged, sk_sig)
     print("[+] PQC Signature Created")
 
-    # AUDIT LOG
-    entry = create_log_entry(
-        "FILE_ENCRYPTED",
-        {"filename": input_file, "bytes": file_size}
-    )
-    signed_entry = sign_log_entry(entry, sk_sig, pk_sig)
-    append_log(signed_entry)
+    # AUDIT LOG — MUST SIGN USING SAME KEYPAIR
+    entry = create_log_entry("FILE_ENCRYPTED", {
+        "filename": input_file,
+        "bytes": file_size
+    })
+    append_log(sign_log_entry(entry, sk_sig, pk_sig), sk_sig, pk_sig)
     print("[+] Audit Log Entry Added")
 
-    # Return everything receiver needs
-    return packaged, signature, pk_sig, hybrid_key
+    # Everything receiver needs
+    return packaged, signature, pk_sig, sk_sig, hybrid_key
 
 
+# ==========================================================
 # RECEIVER WORKFLOW
-def receiver_verify_and_decrypt(packed_bytes: bytes, signature: bytes, pk_sig: bytes, hybrid_key: bytes, output_file: str):
+# ==========================================================
+
+def receiver_verify_and_decrypt(packed_bytes: bytes, signature: bytes,
+                                pk_sig: bytes, sk_sig: bytes,
+                                hybrid_key: bytes, output_file: str):
+
     print("\n=== RECEIVER SIDE ===")
 
     # SIGNATURE VERIFICATION
@@ -81,9 +88,8 @@ def receiver_verify_and_decrypt(packed_bytes: bytes, signature: bytes, pk_sig: b
     valid = verify_file_signature(packed_bytes, signature, pk_sig)
     print(f"[+] Signature Valid: {valid}")
 
-    # Log it
     entry = create_log_entry("SIGNATURE_VERIFIED", {"valid": valid})
-    append_log(sign_log_entry(entry, pk_sig, pk_sig))
+    append_log(sign_log_entry(entry, sk_sig, pk_sig), sk_sig, pk_sig)
 
     if not valid:
         raise ValueError("[!] Signature verification failed — file rejected.")
@@ -95,10 +101,18 @@ def receiver_verify_and_decrypt(packed_bytes: bytes, signature: bytes, pk_sig: b
     print(f"[+] File decrypted successfully → {output_file}")
 
     # AUDIT LOG
-    entry2 = create_log_entry("FILE_DECRYPTED", {"output": output_file, "bytes": len(plaintext)})
-    append_log(sign_log_entry(entry2, pk_sig, pk_sig))
+    entry2 = create_log_entry("FILE_DECRYPTED", {
+        "output": output_file,
+        "bytes": len(plaintext)
+    })
+    append_log(sign_log_entry(entry2, sk_sig, pk_sig), sk_sig, pk_sig)
 
     print("[+] Audit Log Updated")
+
+
+# ==========================================================
+# CLI ENTRYPOINT
+# ==========================================================
 
 if __name__ == "__main__":
     import argparse
@@ -106,36 +120,37 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="QuantaCrypt — Hybrid QKD + PQC Encryption System")
     parser.add_argument("--encrypt", type=str, help="Encrypt and sign this file")
     parser.add_argument("--decrypt", type=str, help="Decrypt using stored ciphertext")
-
     parser.add_argument("--out", type=str, default="decrypted_output.bin", help="Output file for decrypted data")
 
     args = parser.parse_args()
 
     if args.encrypt:
-        packaged, signature, pk_sig, hybrid_key = sender_encrypt_and_sign(args.encrypt)
+        packaged, signature, pk_sig, sk_sig, hybrid_key = sender_encrypt_and_sign(args.encrypt)
 
-        # Save artifacts for demo
+        # Save artifacts
         write_file_bytes("cipher_package.bin", packaged)
         write_file_bytes("cipher_signature.bin", signature)
-
         write_file_bytes("sender_pk_sig.bin", pk_sig)
+        write_file_bytes("sender_sk_sig.bin", sk_sig)
         write_file_bytes("sender_hybrid_key.bin", hybrid_key)
 
-        print("\n[+] Encryption complete. Files saved:\n"
-              "- cipher_package.bin\n"
-              "- cipher_signature.bin\n"
-              "- sender_pk_sig.bin\n"
-              "- sender_hybrid_key.bin\n")
+        print("\n[+] Encryption complete. Files saved:")
+        print("- cipher_package.bin")
+        print("- cipher_signature.bin")
+        print("- sender_pk_sig.bin")
+        print("- sender_sk_sig.bin")
+        print("- sender_hybrid_key.bin")
 
     elif args.decrypt:
         packaged = read_file_bytes("cipher_package.bin")
         signature = read_file_bytes("cipher_signature.bin")
         pk_sig = read_file_bytes("sender_pk_sig.bin")
+        sk_sig = read_file_bytes("sender_sk_sig.bin")
         hybrid_key = read_file_bytes("sender_hybrid_key.bin")
 
-        receiver_verify_and_decrypt(packaged, signature, pk_sig, hybrid_key, args.out)
+        receiver_verify_and_decrypt(packaged, signature, pk_sig, sk_sig, hybrid_key, args.out)
 
     else:
-        print("Use:")
+        print("Usage:")
         print("  python main.py --encrypt myfile.pdf")
         print("  python main.py --decrypt --out result.pdf")
