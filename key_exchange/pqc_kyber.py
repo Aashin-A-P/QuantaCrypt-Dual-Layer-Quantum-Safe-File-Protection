@@ -1,136 +1,91 @@
-import os, sys
 import secrets
 import hashlib
 
-sys.setrecursionlimit(10000)
 
-  
-# Kyber Parameters (Kyber-512 style)
-  
-N = 256               # Polynomial degree
-q = 3329             # Modulus
-eta = 2              # Noise distribution parameter
+# =================================================================
+#  HELPERS
+# =================================================================
 
-
-  
-# Helper: Modular arithmetic
-  
-def mod_q(x):
-    return x % q
+def random_bytes(n: int) -> bytes:
+    return secrets.token_bytes(n)
 
 
-  
-# Polynomial Sampling (real Kyber uses centered binomial)
-  
-def sample_poly():
-    """Simulate small-noise polynomial."""
-    return [(secrets.randbelow(2*eta+1) - eta) for _ in range(N)]
+def kdf(label: bytes, *parts: bytes, length: int = 32) -> bytes:
+    h = hashlib.sha3_512()
+    h.update(label)
+    for p in parts:
+        h.update(p)
+    return h.digest()[:length]
 
 
-def random_poly():
-    """Uniform random polynomial."""
-    return [secrets.randbelow(q) for _ in range(N)]
+def clamp_to_byte_list(b: bytes) -> list:
+    """Convert ANY bytes object into a list of 0–255 integers."""
+    return [x for x in b]    # each x is already 0..255
 
 
-  
-# Polynomial Addition
-  
-def poly_add(a, b):
-    return [(x+y) % q for x, y in zip(a, b)]
+# =================================================================
+#  KYBER-LIKE SIMULATION (FIXED + BYTE-SAFE)
+# =================================================================
+
+def kyber_generate_keypair():
+    """
+    sk = random 32 bytes
+    pk = KDF(sk)
+    ALWAYS returned as byte lists IN 0..255 RANGE
+    """
+    sk = random_bytes(32)
+    pk_bytes = kdf(b"pk", sk, length=32)
+    pk_list = clamp_to_byte_list(pk_bytes)
+    return pk_list, sk
 
 
-  
-# Polynomial Multiplication (NTT-simplified)
-# NOTE: Real Kyber uses NTT; this is a simplified cyclic conv.
-  
-def poly_mul(a, b):
-    res = [0] * N
-    for i in range(N):
-        for j in range(N):
-            res[(i+j) % N] += a[i] * b[j]
-    return [mod_q(x) for x in res]
+def kyber_encapsulate(pk_list: list):
+    """
+    r = random
+    ct = r XOR mask
+    ss = KDF(pk || r)
+    ALL VALUES FOR ct ARE IN 0..255 RANGE
+    """
+
+    pk = bytes(pk_list)
+    r = random_bytes(32)
+
+    mask = kdf(b"mask", pk, length=32)
+    mask_list = clamp_to_byte_list(mask)
+
+    ct_list = [(a ^ b) for a, b in zip(r, mask_list)]
+
+    ss_bytes = kdf(b"ss", pk, r, length=32)
+    return ct_list, ss_bytes
 
 
-  
-# Key Generation
-# pk = A*s + e
-# sk = s
-  
-def kyber_keygen():
-    A = random_poly()
-    s = sample_poly()
-    e = sample_poly()
+def kyber_decapsulate(ct_list: list, sk: bytes, pk_list: list):
+    pk = bytes(pk_list)
 
-    pk = poly_add(poly_mul(A, s), e)
+    mask = kdf(b"mask", pk, length=32)
+    mask_list = clamp_to_byte_list(mask)
 
-    return (A, pk), s
+    r_prime = bytes([(c ^ m) for c, m in zip(ct_list, mask_list)])
+    ss_recv = kdf(b"ss", pk, r_prime, length=32)
+    return ss_recv
 
 
-  
-# Encapsulation
-# ct = (u = A*r + e1, v = pk*r + e2 + m*(q//2))
-# shared_secret = SHA3(v)
-  
-def kyber_encapsulate(A, pk):
-    r = sample_poly()
-    e1 = sample_poly()
-    e2 = sample_poly()
+def generate_pqc_shared_secret(key_length_bytes: int = 32):
+    """
+    Returns:
+        K_PQC (bytes)
+        pk_list (0..255)
+        ct_list (0..255)
+    """
 
-    # Message bit simulated as polynomial with values 0 or q//2
-    m = [secrets.randbelow(2) * (q//2) for _ in range(N)]
-
-    u = poly_add(poly_mul(A, r), e1)
-    v = poly_add(poly_mul(pk, r), poly_add(e2, m))
-
-    ss = hashlib.sha3_256(bytes(str(v), 'utf-8')).digest()
-
-    return (u, v), ss
-
-
-  
-# Decapsulation
-# Recover shared secret from:
-#     v - u*s ≈ m*(q/2)
-  
-def kyber_decapsulate(ct, sk):
-    u, v = ct
-
-    # Compute v - u*s
-    us = poly_mul(u, sk)
-    diff = [(v[i] - us[i]) % q for i in range(N)]
-
-    # Re-extract message bit
-    # If >= q/4, treat as 1
-    m_recovered = [1 if x > q//4 else 0 for x in diff]
-    m_poly = [bit * (q//2) for bit in m_recovered]
-
-    ss = hashlib.sha3_256(bytes(str(v), 'utf-8')).digest()
-
-    return ss
-
-
-  
-# High-level interface
-  
-def generate_pqc_shared_secret():
-    (A, pk), sk = kyber_keygen()
-
-    ct, ss_sender = kyber_encapsulate(A, pk)
-    ss_receiver = kyber_decapsulate(ct, sk)
+    pk_list, sk = kyber_generate_keypair()
+    ct_list, ss_sender = kyber_encapsulate(pk_list)
+    ss_receiver = kyber_decapsulate(ct_list, sk, pk_list)
 
     if ss_sender != ss_receiver:
-        raise ValueError("Kyber simulation mismatch — check polynomial parameters.")
+        raise ValueError("KEM mismatch — simulated failure.")
 
-    return ss_sender, pk, ct
+    digest = hashlib.sha3_512(ss_sender).digest()
+    final_key = digest[:key_length_bytes]
 
-
-  
-# Test
-  
-if __name__ == "__main__":
-    print("=== Realistic Kyber Simulation Test ===")
-    ss, pk, ct = generate_pqc_shared_secret()
-    print("Shared Secret:", ss.hex())
-    print("Ciphertext u length:", len(ct[0]))
-    print("Ciphertext v length:", len(ct[1]))
-    print("Simulation OK.")
+    return final_key, pk_list, ct_list
