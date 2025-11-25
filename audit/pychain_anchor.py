@@ -1,7 +1,3 @@
-# pychain_anchor.py
-# Pure-Python Bitcoin blockchain anchoring system
-# No DLLs, no CLI, no OTS binaries required.
-
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,9 +11,7 @@ from utils.constants import AUDIT_LOG_FILE
 ANCHOR_FILE = "audit_anchor.json"
 
 
-# ---------------------------------------------------------
-# Compute SHA3-256 hash of audit.log
-# ---------------------------------------------------------
+# Compute SHA3 hash of the audit log
 def compute_audit_hash():
     if not os.path.exists(AUDIT_LOG_FILE):
         return None
@@ -28,9 +22,7 @@ def compute_audit_hash():
     return digest
 
 
-# ---------------------------------------------------------
-# Fetch latest Bitcoin block (via mempool.space API)
-# ---------------------------------------------------------
+# Fetch the latest block from Bitcoin Mainnet
 def get_latest_block():
     url = "https://mempool.space/api/blocks"
     try:
@@ -39,10 +31,6 @@ def get_latest_block():
     except:
         return None
 
-
-# ---------------------------------------------------------
-# Create blockchain anchor proof
-# ---------------------------------------------------------
 def anchor_to_blockchain():
     log_hash = compute_audit_hash()
     if log_hash is None:
@@ -71,10 +59,6 @@ def anchor_to_blockchain():
 
     return anchor_data
 
-
-# ---------------------------------------------------------
-# Verify anchor integrity
-# ---------------------------------------------------------
 def verify_anchor():
     if not os.path.exists(ANCHOR_FILE):
         return {"status": "NO_ANCHOR"}
